@@ -15,15 +15,14 @@ Accessories:
 Wiring Instructions:
 
 	Mounting the tft display shield:
- 
 	- To insert the tft display shield, unplug (power down) your Arduino first.
 	It should slide right into the Arduino if you insert it in the correct 
 	direction. The micro SD card slot must be on the same side as the Arduino's 
 	power plug. Do not bend any pins while inserting
-
 	- TFT display and SD card will share the hardware SPI interface. SPI uses 
 	separate clock and data lines, along with a select line to choose the device 
 	you wish to talk to
+ 
 	Wiring the joystick:
 	- Insert the joystick into the breadboard using a female header. Remember 
 	that each row of holes in the breadboard are connected by a strip of metal
