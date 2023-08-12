@@ -13,7 +13,9 @@ Accessories:
 	- USB cable
 
 Wiring Instructions:
+
 	Mounting the tft display shield:
+ 
 	- To insert the tft display shield, unplug (power down) your Arduino first.
 	It should slide right into the Arduino if you insert it in the correct 
 	direction. The micro SD card slot must be on the same side as the Arduino's 
