@@ -1,0 +1,73 @@
+https://github.com/Arunscape/Arduino-Stuff/blob/master/2017%20assignments/Assignment%202%20restaurant%20finder/part_2/a2-1.cpp
+
+/* Given an array of length n > 0 and an index 0 <= pi < n,
+this rearranges the array so all items <= a[pi]
+appearbefore a[pi] and all items > a[pi] appear after a[pi].
+Returns the index of a[pi] after the rearrangement.*/
+
+// A utility function to swap two elements  
+void swapvalue(int &a, int &b)  
+{  
+    int t = a;  
+    a = b;  
+    b = t;  
+}  
+// Sort an array with n elements using Quick Sort
+void qsort(int array[],int n, int pi){
+
+int n = sizeof(array);
+if (n <= 1){ 
+	return 0;
+}
+int pi = array[pi];
+    for (int j = low; j <= high - 1; j++)  
+    {  
+        // If j element is smaller than the pivot  
+        if (array[j] < pi)  
+        {  
+            i++; // increment index of smaller element  
+            swap(&array[i], &array[j]);  
+        }  
+    }  
+    swapvalue(&array[i + 1], &array[high]);  
+    return (i + 1); 
+    if (low < high)  
+    {  
+        /* pi is partitioning index, arr[p] is now  
+        at right place */
+        int pi = pivot(arr, low, high);  
+  
+        // Separately sort elements before  
+        // partition and after partition  
+        qsort(arr, low, pi - 1);  
+        qsort(arr, pi + 1, high);  
+    }  
+
+}  
+/* Takes last element as pivot, places  
+the pivot element at its correct position in sorted  
+array, and places all smaller (smaller than pivot)  
+to left of pivot and all greater elements to right  
+of pivot */
+int pivot (int array[], int low, int high)  
+{  
+    int pivot = array[high]; // pivot  
+    int i = (low - 1); // Index of smaller element  
+  
+    for (int j = low; j <= high - 1; j++)  
+    {  
+        // If current element is smaller than the pivot  
+        if (array[j] < pivot)  
+        {  
+            i++; 
+            //swap the elements
+            swapvalue(&array[i], &array[j]);  
+        }  
+    }  
+    swapvalue(&array[i + 1], &array[high]);  
+    return (i + 1);  
+}  
+
+int main(){
+	qsort(array, 0, n - 1); 
+}

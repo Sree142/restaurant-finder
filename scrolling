@@ -1,0 +1,85 @@
+// Menu scrolling
+
+if(selectedrest != 0&& oldrest == (21*pageCount)+20 && selectedRest%21 == pageCount){
+	Serial.print("scroll down");
+	loadNewScreen(false);
+	pageCount++;
+}
+
+
+int pagenum = NUM_RESTAURANTS/21;
+
+
+int highlightedrest;
+
+// assumes the text size is already 2, text is not wrapping,
+// and that 0 <= index < NUM_LINES
+void displayrest(int index) {
+	// 15 is the vertical span of a size-2 character
+	// (including the one pixel of padding below)
+	tft.setCursor(0, 15*index);
+
+	if (index == highlightedrest) {
+		tft.setTextColor(TFT_BLACK, TFT_WHITE);
+	}
+	else {
+		tft.setTextColor(TFT_WHITE, TFT_BLACK);
+	}
+	tft.println(REST_DISP_NUM[index]);
+}
+
+void displayAllrest() {
+	tft.fillScreen(TFT_BLACK);
+
+	tft.setTextSize(2);
+	tft.setTextWrap(false); // change to true to see the result
+
+	for (int index = 0; index < ; index++) {
+		displayrest(index);
+	}
+}
+
+
+int main() {
+	setup();
+
+	highlightedrest = 0;
+	displayAllrest();
+	for (highlightedrest = 1; highlightedrest < REST_DISP_NUM; highlightedrest++) {
+		delay(1000);
+		// draw the old highlighted string normally
+		displayrest(highlightedrest-1);
+		// highlight the new string
+		displayrest(highlightedrest);
+	}
+	// Challenge: Use joystick to scroll the list and select a line
+	Serial.end();
+	return 0;
+}
+
+int scroll(){
+int restchoice = 0;
+
+int vertscroll = analogRead(JOY_VERT_ANALOG);
+
+	if (vertscroll > JOY_CENTRE + JOY_DEADZONE) {
+		restchoice++;
+		if (restchoice == REST_DISP_NUM) {
+			restchoice = 0;
+			pagenum += 1;
+		}
+	}
+
+	else (vertscroll < JOY_CENTRE - JOY_DEADZONE){
+		restchoice--;
+		if (restchoice == -1 || ) {
+			restchoice = 0;
+			pagenum -= 1;
+		}
+	}
+
+	//if joystick selects a restaurant
+	if (digitalRead(JOY_SEL) == LOW) {
+		restaurant r;
+		getRestaurant(&r, restaurants[restchoice+topRest].index, &card, &cache);
+}

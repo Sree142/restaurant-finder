@@ -1,0 +1,457 @@
+// -----------------------------------------------------
+
+// ------------------------------------------------------
+
+#include <Arduino.h>
+#include <Adafruit_GFX.h>
+#include <MCUFRIEND_kbv.h>
+#include <SPI.h>
+#include <SD.h>
+#include "lcd_image.h"
+#include <TouchScreen.h>
+
+#define SD_CS 10
+
+// physical dimensions of the tft display (# of pixels)
+// #define DISPLAY_WIDTH  480
+// #define DISPLAY_HEIGHT 320
+
+#define YEG_SIZE 2048
+
+lcd_image_t yegImage = { "yeg-big.lcd", YEG_SIZE, YEG_SIZE };
+
+
+#define JOY_CENTER   512
+#define JOY_DEADZONE 64
+#define CURSOR_SIZE 9
+
+// touch screen pins, obtained from the documentaion
+#define YP A3 // must be an analog pin, use "An" notation!
+#define XM A2 // must be an analog pin, use "An" notation!
+#define YM 9  // can be a digital pin
+#define XP 8  // can be a digital pin
+
+#define JOY_VERT  A9 // should connect A9 to pin VRx
+#define JOY_HORIZ A8 // should connect A8 to pin VRy
+#define JOY_SEL   53
+
+// dimensions of the part allocated to the map display
+#define MAP_DISP_WIDTH 420
+#define MAP_DISP_HEIGHT 320
+
+#define REST_START_BLOCK 4000000
+#define NUM_RESTAURANTS 1066
+// #define NUM_MENU 21
+
+// calibration data for the touch screen, obtained from documentation
+// the minimum/maximum possible readings from the touch point
+#define TS_MINX 100
+#define TS_MINY 120
+#define TS_MAXX 940
+#define TS_MAXY 920
+
+// thresholds to determine if there was a touch
+#define MINPRESSURE   10
+#define MAXPRESSURE 1000
+
+MCUFRIEND_kbv tft;
+#include <Fonts/FreeSansBold9pt7b.h>
+#define BLACK   0x0000
+// #define BLUE    0x001F
+#define RED     0xF800
+// #define GREEN   0x07E0
+// #define CYAN    0x07FF
+// #define MAGENTA 0xF81F
+// #define YELLOW  0xFFE0
+// #define WHITE   0xFFFF
+
+//  These  constants  are  for  the  2048 by 2048  map.
+// #define  MAP_WIDTH  2048
+// #define  MAP_HEIGHT  2048
+#define  LAT_NORTH  5361858l
+#define  LAT_SOUTH  5340953l
+#define  LON_WEST  -11368652l
+#define  LON_EAST  -11333496l
+
+// a multimeter reading says there are 300 ohms of resistance across the plate,
+// so initialize with this to get more accurate readings
+TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
+
+// different than SD
+Sd2Card card;
+
+struct restaurant {
+  int32_t lat;
+  int32_t lon;
+  uint8_t rating; // from 0 to 10
+  char name[55];
+};
+
+struct RestDist {
+  uint16_t index; // index of restaurant from 0 to NUM_RESTAURANTS-1
+  uint16_t dist;  // manhattan distance to cursor position
+};
+
+struct coords{
+  int X;
+  int Y;
+};
+
+RestDist *restDist = new RestDist[NUM_RESTAURANTS];
+coords cursor,prevCursor, yeg;
+int blockindex = 0;
+
+
+void redrawCursor(uint16_t colour);
+int mode1();
+void mode1_to_0(int x);
+
+void setup() {
+  init();
+  Serial.begin(9600);
+  pinMode(JOY_SEL, INPUT_PULLUP);
+
+  //    tft.reset();             // hardware reset
+  uint16_t ID = tft.readID();    // read ID from display
+  Serial.print("ID = 0x");
+  Serial.println(ID, HEX);
+  if (ID == 0xD3D3) ID = 0x9481; // write-only shield
+  
+  // must come before SD.begin() ...
+  tft.begin(ID);                 // LCD gets ready to work
+
+  Serial.print("Initializing SD card...");
+  if (!SD.begin(SD_CS)) {
+    Serial.println("failed! Is it inserted properly?");
+    while (true) {}
+    Serial.println("OK!");
+  }
+
+  // SD card initialization for raw reads
+  // Serial.print("Initializing SPI communication for raw reads...");
+  if (!card.init(SPI_HALF_SPEED, SD_CS)) {
+    Serial.println("failed! Is the card inserted properly?");
+    while (true) {}
+  }
+  else {
+    // Serial.println("OK!");
+  }
+
+  tft.setRotation(1);
+
+  tft.fillScreen(TFT_BLACK);
+
+  // initial cursor position is the centre of the screen
+  cursor.X = MAP_DISP_WIDTH/2;
+  cursor.Y = MAP_DISP_HEIGHT/2;
+
+  // initial map position is the middle of Edmonton
+  yeg.X = YEG_SIZE/2;
+  yeg.Y = YEG_SIZE/2;
+
+  // draws the centre of the Edmonton map, leaving the rightmost 60 columns black
+  lcd_image_draw(&yegImage, &tft, yeg.X, yeg.Y,
+                 0, 0, MAP_DISP_WIDTH, MAP_DISP_HEIGHT);
+
+  redrawCursor(TFT_RED);
+
+  // TSPoint touch = ts.getPoint(); // (x, y, pressure)
+  // pinMode(YP, OUTPUT);
+  // pinMode(XM, OUTPUT);
+}
+
+void redrawCursor(uint16_t colour) {
+  tft.fillRect(cursor.X - CURSOR_SIZE/2, cursor.Y - CURSOR_SIZE/2,
+               CURSOR_SIZE, CURSOR_SIZE, colour);
+}
+
+void drawPoints(int16_t x, int16_t y){
+	tft.fillCircle(x, y, 3, BLACK);
+}
+
+void scrollMap(){
+	bool Yegchange = false;
+ 
+  // If we nudged the left or right edge, shift the map over half a screen.
+  if(cursor.X == MAP_DISP_WIDTH - CURSOR_SIZE/2 - 1 && yeg.X < YEG_SIZE - MAP_DISP_WIDTH) {    yeg.X += MAP_DISP_WIDTH;
+    Yegchange = true;
+  }
+  else if (cursor.X == CURSOR_SIZE/2 && yeg.X > 0) {
+     yeg.X -= MAP_DISP_WIDTH;
+     Yegchange = true;
+  }
+
+  // If we nudge the top or bottom edge, shift the map up or down half a screen.
+  if (cursor.Y == MAP_DISP_HEIGHT-CURSOR_SIZE/2 && yeg.Y < YEG_SIZE - MAP_DISP_HEIGHT) {
+    yeg.Y += MAP_DISP_HEIGHT;
+    Yegchange = true;
+  }
+  else if (cursor.Y == CURSOR_SIZE/2 && yeg.Y != 0) {
+    yeg.Y -= MAP_DISP_HEIGHT;
+    Yegchange = true;
+  }
+
+  // If we nudged the edge, recalculate and draw the new rectangular portion of Edmonton to display.
+  if (Yegchange) {
+    // Make sure we didn't scroll outside of the map.
+    cursor.X = MAP_DISP_WIDTH / 2;
+    cursor.Y = MAP_DISP_HEIGHT/2;
+    yeg.X = constrain(yeg.X, 0, YEG_SIZE - MAP_DISP_WIDTH);
+    yeg.Y = constrain(yeg.Y, 0, YEG_SIZE - MAP_DISP_HEIGHT);
+
+    lcd_image_draw(&yegImage, &tft, yeg.X, yeg.Y, 0, 0, MAP_DISP_WIDTH, MAP_DISP_HEIGHT);
+  }
+}
+
+void processJoystick() {
+  int xVal = analogRead(JOY_HORIZ);
+  int yVal = analogRead(JOY_VERT);
+  // int modeSelect = digitalRead(JOY_SEL);
+
+  // storing the original y-coordinate of the left upper corner of the 
+  //cursor before updating
+  prevCursor.Y = cursor.Y - CURSOR_SIZE/2;
+  // initializing the variable which is used to determine whether the 
+  // joystick is moved in the y direction
+  bool Curchange = false;
+
+  // if the joystick is moved updards, the y coordinate of the cursor is
+  // decreased in such a way that the speed of the cursor changes based
+  // on the extent of pushing the joystick in the upward direction
+  if (yVal < JOY_CENTER - JOY_DEADZONE) {
+    cursor.Y -= (9 - yVal/JOY_DEADZONE); // decrease the y coordinate of the cursor
+    Curchange = true;
+  }
+
+  // increasing the y coordinate if the joystick is pushed in the downward direction 
+  //relative to the y axis and updating the boolean changeY
+  else if (yVal > JOY_CENTER + JOY_DEADZONE) {
+    cursor.Y += (yVal/JOY_DEADZONE - 7);
+    Curchange = true;
+  }
+
+  // storing the value of the x coordinate of the upper left corner of the cursor
+  prevCursor.X = cursor.X - CURSOR_SIZE/2;
+
+  // updating the x coordinate if the joystick is pushed to the left
+  if (xVal > JOY_CENTER + JOY_DEADZONE) {
+    cursor.X -= (xVal/JOY_DEADZONE - 7);
+    Curchange = true;
+  }
+
+  // updating the x coordinate of the cursor if pushed to the right
+  else if (xVal < JOY_CENTER - JOY_DEADZONE) {
+    cursor.X += (9 - xVal/JOY_DEADZONE);
+    Curchange = true;
+  }
+  
+  // contraining the cursor to not go beyond the given patch of the edmonton map
+  cursor.X = constrain(cursor.X, CURSOR_SIZE/2, MAP_DISP_WIDTH - CURSOR_SIZE/2 - 1);
+  cursor.Y = constrain(cursor.Y, CURSOR_SIZE/2, MAP_DISP_HEIGHT - CURSOR_SIZE/2);
+  // if any of the two or both of the x and y coordinates change, redraw the patch of
+  // the edmonton map in the previous position of the cursor, hence we use prevCursorX
+  // and prevCursorY and then redraw the cursor in the new updated position.
+  if (Curchange) {
+  	scrollMap();
+    lcd_image_draw(&yegImage, &tft,
+    //yegMiddleX + prevCursorX, yegMiddleY + prevCursorY,
+    yeg.X + prevCursor.X, yeg.Y + prevCursor.Y,
+    prevCursor.X, prevCursor.Y,
+    CURSOR_SIZE, CURSOR_SIZE);
+    redrawCursor(TFT_RED);
+  }
+  delay(20);
+}
+
+// int coordselectedrest[2];
+
+int32_t x_lon(int16_t x) {
+  return map(x, 0, YEG_SIZE, LON_WEST, LON_EAST);
+}
+
+int32_t y_lat(int16_t y) {
+  return map(y, 0, YEG_SIZE, LAT_NORTH, LAT_SOUTH);
+}
+
+int16_t lon_x(int32_t lon) {
+  return map(lon, LON_WEST, LON_EAST, 0, YEG_SIZE);
+}
+
+int16_t lat_y(int32_t lat) {
+  return map(lat, LAT_NORTH, LAT_SOUTH, 0, YEG_SIZE);
+}
+
+void getRestaurantFast(int restIndex, restaurant* restPtr, int* blockIndex) {
+  uint32_t blockNum = REST_START_BLOCK + restIndex/8;
+  restaurant restBlock[8];
+
+  if(*blockIndex != blockNum){
+    while (!card.readBlock(blockNum, (uint8_t*) restBlock)) {
+      Serial.println("Read block failed, trying again.");
+    }
+    *blockIndex = blockNum;
+  }
+  *restPtr = restBlock[restIndex % 8];
+}
+
+
+void updateRestDist(RestDist* restDist){
+  restaurant rest;
+  for(int i = 0; i < NUM_RESTAURANTS; i++){
+    getRestaurantFast(i, &rest, &blockindex);
+    restDist[i].index = i;
+    restDist[i].dist = abs(lon_x(rest.lon)-(cursor.X+yeg.X)) + abs(lat_y(rest.lat)-(cursor.Y+yeg.Y));
+  }
+}
+
+void swap(RestDist *rest1, RestDist *rest2) {
+  RestDist temp = *rest1;
+  *rest1 = *rest2;
+  *rest2 = temp;
+}
+
+void isort(RestDist* restDist, int16_t length){
+	int i = 1;
+	while(i < length){
+		int j = i;
+		while(j > 0 && restDist[j - 1].dist > restDist[j].dist){
+			swap(&restDist[j], &restDist[j - 1]);
+			j--;
+		}
+		i++;
+	}
+}
+
+void highlight(int i, int selectedRest){
+	 restaurant r;
+  tft.setCursor(0, 15*i);
+	getRestaurantFast(restDist[i].index, &r, &blockindex);//, &allBlocks);
+	if (i !=  selectedRest) { // not  highlighted
+		//  white  characters  on  black  background
+		tft.setTextColor (0xFFFF , 0x0000);
+	}
+	else { //  highlighted
+		//  black  characters  on  white  background
+		tft.setTextColor (0x0000 , 0xFFFF);
+	}
+	tft.print(r.name);
+}
+
+void displayNames(){
+	tft.fillScreen (0);
+	tft.setCursor(0, 0); //  where  the  characters  will be  displayed
+	tft.setTextWrap(false);
+  tft.setTextSize(2);
+	int selectedRest = 0; //  which  restaurant  is  selected?
+
+	for (int16_t i = 0; i < 21; i++) {
+		highlight(i, selectedRest);
+		tft.print("\n");
+	}
+	tft.print("\n");
+}
+
+void scrollList(int* selectedRest){
+	int yVal = analogRead(JOY_VERT);
+	int oldselectedRest = *selectedRest;
+  if (yVal < JOY_CENTER - 3*JOY_DEADZONE) {
+    *selectedRest -= 1;
+  }
+
+  else if (yVal > JOY_CENTER + 3*JOY_DEADZONE) {
+    *selectedRest += 1;
+  }
+
+  *selectedRest = constrain(*selectedRest,0,20);
+  if(oldselectedRest != *selectedRest){
+  	tft.setCursor(0, 15*oldselectedRest);
+  	highlight(oldselectedRest, *selectedRest);
+
+  	tft.setCursor(0, 15*(*selectedRest));
+  	highlight(*selectedRest, *selectedRest);
+  }
+}
+
+int mode1(){
+  tft.fillScreen(TFT_BLACK);
+    tft.setCursor(0,0);
+
+    updateRestDist(restDist);
+    isort(restDist, NUM_RESTAURANTS);
+    Serial.println("done sorting");
+    displayNames();
+
+    int selectedRest = 0;
+    while(digitalRead(JOY_SEL)){
+		  scrollList(&selectedRest);
+    }
+
+    return selectedRest;
+}
+
+void mode1_to_0(int selectedRest){
+  restaurant r;
+  getRestaurantFast(restDist[selectedRest].index, &r, &blockindex);
+
+	yeg.X = lon_x(r.lon) - MAP_DISP_WIDTH/2;
+	yeg.Y = lat_y(r.lat) - MAP_DISP_HEIGHT/2;
+
+	yeg.X = constrain(yeg.X, 0, YEG_SIZE - MAP_DISP_WIDTH);
+  yeg.Y = constrain(yeg.Y, 0, YEG_SIZE - MAP_DISP_HEIGHT);
+
+  cursor.X = lon_x(r.lon) - yeg.X;
+  cursor.Y = lat_y(r.lat) - yeg.Y;
+
+  cursor.X = constrain(cursor.X, CURSOR_SIZE/2, MAP_DISP_WIDTH - CURSOR_SIZE/2 - 1);
+	cursor.Y = constrain(cursor.Y, CURSOR_SIZE/2, MAP_DISP_HEIGHT - CURSOR_SIZE/2);
+  prevCursor = cursor;
+  tft.fillScreen(TFT_BLACK);
+  lcd_image_draw(&yegImage, &tft, yeg.X, yeg.Y, 0, 0, MAP_DISP_WIDTH, MAP_DISP_HEIGHT);
+  redrawCursor(TFT_RED);
+}
+
+void drawDots(){
+  TSPoint touch = ts.getPoint(); // (x, y, pressure)
+  pinMode(YP, OUTPUT);
+  pinMode(XM, OUTPUT);
+  if (touch.z >= MINPRESSURE && touch.z <= MAXPRESSURE) {
+    int ptx = map(touch.y, TS_MINX, TS_MAXX, 0, tft.width());
+    int pty = map(touch.x, TS_MINY, TS_MAXY, 0, tft.height());
+
+    if(ptx < 420){
+    
+    updateRestDist(restDist);
+    // isort(restDist, NUM_RESTAURANTS);
+    // Serial.println("done sorting");
+
+      restaurant r;
+      for(int i = 0; i<NUM_RESTAURANTS; i++){
+      if(restDist[i].dist <= MAP_DISP_WIDTH){
+        getRestaurantFast(restDist[i].index, &r, &blockindex);
+        drawPoints(lon_x(r.lon) - yeg.X, lat_y(r.lat) - yeg.Y);
+      }
+      }
+    }
+  }
+}
+
+int main() {
+  // Serial.println("bye");
+  setup();
+ 
+  while (true) {
+    if (digitalRead(JOY_SEL) == 0) {
+      delete[] restDist;
+      restDist = new RestDist[NUM_RESTAURANTS];
+      
+      int selectedRest = mode1();
+      mode1_to_0(selectedRest);
+    }
+    processJoystick();
+    drawDots();
+  }
+  delete[] restDist;
+  restDist = NULL;
+  Serial.end();
+  return 0;
+}

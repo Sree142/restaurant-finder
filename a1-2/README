@@ -1,0 +1,99 @@
+Names: Sree Nidhi Thanneeru, Nafisa Hasan
+ID Number: 1627462, 1576524
+CMPUT 275 Winter 2020
+
+Assignment 1 Part 2: Restaurant Finder
+
+Included Files:
+	- a1part2.cpp
+	- restaurant.cpp
+	- restaurant.h
+	- Makefile
+	- README
+
+Accessories:
+	- Arduino Mega Board
+	- tft display shield
+	- micro SD card
+	- 7 jumper wires
+	- a female header
+	- joystick
+	- breadboard
+	- USB cable
+
+Wiring Instructions:
+	Mounting the tft display shield:
+	- To insert the tft display shield, unplug (power down) your Arduino first.
+	It should slide right into the Arduino if you insert it in the correct 
+	direction. The micro SD card slot must be on the same side as the Arduino's 
+	power plug. Do not bend any pins while inserting
+
+	- TFT display and SD card will share the hardware SPI interface. SPI uses 
+	separate clock and data lines, along with a select line to choose the device 
+	you wish to talk to
+	Wiring the joystick:
+	- Insert the joystick into the breadboard using a female header. Remember 
+	that each row of holes in the breadboard are connected by a strip of metal
+	underneath so you must use holes that are in different rows
+	- You will need 7 short jumper wires to wire the joystick
+	- Wire a hole in the negative bus bar (indicated by a blue stripe) to a 
+	GND pin of your Arduino and a hole in the positive bus bar (indicated by a
+	red stripe) to a 5v pin
+	- Use the other 5 jumper wires to wire the joystick
+	- Bend one end of a jumper wire and connect it to Analog Pin A8, connect 
+	the other end to VRy pin of joystick
+	- Bend one end of a jumper wire and connect it to Analog Pin A9, connect 
+	the other end to VRx pin of joystick
+	- Wire Digital Pin 53 of Arduino to SW pin of joystick
+	- Wire GND pin of joystick to a hole in the negative bus bar
+	- Wire 5v pin of joystick to a hole in the positive bus bar
+
+Running Instructions:
+	1.  Connect  the  Arduino  to the PC using an A-B style  USB  cable. Ensure  
+	the  Arduino  is using  the  proper  serial  port (/dev/ttyACM0  or -ACM1).
+
+	2. In the  directory  containing  the  files  a1part2.cpp, restaurant.cpp, 
+	restaurant.h, yegmap.h, yegmap.cpp, lcd_image.h, lcd_image.cpp and the 
+	Makefile, use the command "make  upload  && serial -mon" to  upload  the  
+	code to the  Arduinoand  view  the  serial  monitor.
+
+	3. When a part of the map appears on the tft display, you can control the 
+	cursor with the joystick and when the cursor nudges the boundaries, the 
+	map scrolls.
+
+	4. On the display, when in mode 0, there are two buttons on the rightmost 
+	side. The upper button is rate selecting i.e, to select a number between 1 
+	and 5, this leads to sorting the restaurants only equal to and above the 
+	selected rate. And the bottom button is to chose the type of sorting to be 
+	used to sort the array of restauarants based on distance.
+
+	5. When the joystick is pressed when in mode 0, it switches to mode 1 and 
+	a menu of restaurants equal to and above the chosen rate appear with a 
+	maximum of 21 restaurants appearing on the display and the first restaurant 
+	highlighted intially. When the joystick is moved up or down, the restaurant 
+	which is highlighted can be changed. And if the number of restaurants equal 
+	to and greater that the rate, the menu can be scrolled to the next set of 
+	restaurants. A restaurant can be choosed among the given list by pressing 
+	the joystick on the highlighted one.
+
+	6. And when tranitioned from mode 0 to mode 1, on serial monitor, the time 
+	taken to sort the restaurants having ratings equal to or above the scale 
+	version of selected rate, according to the type of sorting selected(ISORT, 
+	QSORT, BOTH) is printed out.
+
+	5. When the joystick is pressed for the second time, it switches back to 
+	mode 0 and you can view the map again and the cursor is now at the position 
+	of the restaurant selected centered on the display(except for the 
+	exceptional cases i.e boundary cases where centering the cursor is impossible).
+
+	6. When in mode 0, when the display screen is touched on the patch of the 
+	map displayed, blue dots in the positions of all the restaurants which has 
+	rating equal to or greater that the chosen rate, in that particular patch of 
+	the map appear.
+
+Notes and Assumption:
+	- The buttons(the button for sort selector), on rare occasions does not 
+	work, as in doesn't read the touch on the display and may need a second tap
+	but most of the time, it works perfectly and switches between ISORT, QSORT
+	and BOTH. We used some of the solution from part 1 that was provided on 
+	eclass and we also used some of our README from our submission in part 1. 
