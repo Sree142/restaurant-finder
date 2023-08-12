@@ -40,6 +40,7 @@ Wiring Instructions:
 	- Wire 5v pin of joystick to a hole in the positive bus bar
 
 Running Instructions:
+
 	1.  Connect  the  Arduino  to the PC using an A-B style  USB  cable. Ensure  
 	the  Arduino  is using  the  proper  serial  port (/dev/ttyACM0  or -ACM1).
 
